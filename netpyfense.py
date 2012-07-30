@@ -3,23 +3,25 @@ import sys
 import os
 import subprocess
 import re
+import gzip
 
-def main(args):
+def test(args):
     
     events = []
     print(args)
     if os.path.isfile(args[0]):
-        handle = parse_flow_binary(args[0]) 
-#        if handle is not None:
- #           events = parse_flow_text(handle)
-  #          os.remove(handle)
-    return events
+        events = parse(args[0])
+        print(len(events))
+    sys.exit(0)
+        
+
 
 def parse(path):
     events = []
     for bin_type in bin_map:
-        if path.endswith(bin_type):
+        if path.endswith(bin_type) or bin_type in path:
             events = bin_map[bin_type](path,bin_type)
+
     return events
 
 def parse_flow_binary(path,bin_type):
@@ -63,10 +65,41 @@ def parse_flow_binary(path,bin_type):
             event["file_name"]=file_name
             events.append(event)
         p.stdout.flush()
-    print("netpyfence processed: ", path," events: ",len(events))
+    print("netpyfense processed: ", path," events: ",len(events))
     return events 
 
+def parse_dragon(path, bin_type):
+    events =[]
+    f = None
+    
+    #use gzip if it is compressed
+    if path.endswith(".gz"):
+        f = gzip.open(path)
+    else:
+        f = open(path)
+   
+    headers = ['date_time','sensor_id','protocol_name',
+               'sip','dip','sport','dport','additional_1',
+               'additional_2','protocol','event','blank']    
+    
+    for line in f:
+        splits = line.split("|")
+        #defense guard in case there is a rogue event
+        if len(splits) != 13:
+            try:
+                print(path,splits)
+                raise IndexError("out of bounds")
+            finally:
+                sys.exit(-1)
+        
+        else:
+            events.extend([dict(zip(headers,splits))])
+        f.flush()
+    f.close()
+    return events
+
 bin_map = {".flow":parse_flow_binary,
+           "dragon.log":parse_dragon,
            }
 
-if __name__=="__main__": main(sys.argv[1:])
+if __name__=="__main__": test(sys.argv[1:])

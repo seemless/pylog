@@ -35,6 +35,7 @@ def ingest(path):
       clean_event = clean(event)
       if clean_event is not None:
         cleaned.append(clean_event)
+        
   print("number of events in: "+path, len(events))      
   print("numer of events cleaned: ",len(cleaned))  
   print("do the numbers match?: ", len(events) == len(cleaned))
