@@ -1,4 +1,5 @@
 import re
+import carny
 
 def parse_log(path):
     events = []    
@@ -48,8 +49,8 @@ def parse_log(path):
                         #some logs don't record year data, add it. 
                         if type_used in unspecified:
                             event["date_time"] = event["date_time"].strip()+" 2006"
-
-                        events.append(event)
+                        cleaned = clean(event)
+                        events.extend([cleaned])
     else:
         print("Log type not found. Pylog is ignoring. \n"+ path)
     return events
@@ -161,6 +162,17 @@ def parse_ossec_log(path, type_used, file_name):
                 events.append(event)
 
     return events
+
+def clean(event):
+  
+    try:
+        event["epoch"] = carny.guess(event["date_time"])
+    except Exception as e:
+        print("event is mis-formatted")
+        print(e)
+        return None
+    
+    return event
 
 def log_types():
     first_keys = log_map.keys()

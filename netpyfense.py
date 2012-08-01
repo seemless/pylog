@@ -4,6 +4,7 @@ import os
 import subprocess
 import re
 import gzip
+import carny
 
 def test(args):
     
@@ -61,9 +62,10 @@ def parse_flow_binary(path,bin_type):
         m = comp.match(line)
         if m is not None:
             event = m.groupdict()
-
+            event['type'] = bin_type
             event["file_name"]=file_name
-            events.append(event)
+            cleaned = clean(event)
+            events.extend([cleaned])
         p.stdout.flush()
     print("netpyfense processed: ", path," events: ",len(events))
     return events 
@@ -93,13 +95,44 @@ def parse_dragon(path, bin_type):
                 sys.exit(-1)
         
         else:
-            events.extend([dict(zip(headers,splits))])
+            event = dict(zip(headers,splits))
+            event['type'] = bin_type
+            event['file_name'] = path.split("/")[-1]
+            cleaned = clean(event)
+            events.extend([cleaned])
         f.flush()
     f.close()
     return events
 
+def parse_snort_alert(path, bin_type):
+    
+    events =[]
+    f = None
+    
+    #use gzip if it is compressed
+    if path.endswith(".gz"):
+        f = gzip.open(path)
+    else:
+        f = open(path)    
+    
+    for line in f:
+        print(line)
+        f.flush()
+
+def clean(event):
+  
+    try:
+        event["epoch"] = carny.guess(event["date_time"])
+    except Exception as e:
+        print("event is mis-formatted")
+        print(e)
+        return None
+      
+    return event
+
 bin_map = {".flow":parse_flow_binary,
            "dragon.log":parse_dragon,
+           "alert":parse_snort_alert,
            }
 
 if __name__=="__main__": test(sys.argv[1:])
