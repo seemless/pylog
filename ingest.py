@@ -33,17 +33,7 @@ def ingest(path):
 
   #print(events)
   db_objs = []  
-
-      
-  #last_index = len(objects)-1
-  #clean up the list so I have no junk
   
-  
-  #objects[last_index] = objects[last_index].strip()
-  #format the objects so I can insert them into the database
-  #zipped = zip(headers,objects)
-  #d = dict(zipped)
-  #add to the list for a bulk insert
   #db_objs.append(d)
   
   #num_objs = len(db_objs)
@@ -62,16 +52,6 @@ def ingest(path):
   
   return True
   
-def clean(event):
-  
-  try:
-    event["epoch"] = carny.guess(event["date_time"])
-  except Exception as e:
-    print("event is mis-formatted")
-    print(e)
-    return None
-  
-  return event
   
 if __name__=="__main__":
   main(sys.argv)
