@@ -45,7 +45,7 @@ def parse_log(path):
                     event = method(line,pattern,headers)
                     if event is not None:
                         event["type"] = type_used
-                        event["file_name"] = file_name
+                        event["path"] = path
                         #some logs don't record year data, add it. 
                         if type_used in unspecified:
                             event["date_time"] = event["date_time"].strip()+" 2006"

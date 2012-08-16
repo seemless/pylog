@@ -2,7 +2,7 @@ import sys, os, re, time
 import pylog
 import netpyfense
 import carny
-#import pymongo
+import pymongo
 
 def main(args):
 
@@ -11,7 +11,7 @@ def main(args):
     if os.path.isfile(arg):
 
         success = ingest(arg)
-
+        print(success)
     else:
       print("Invalid path, first argument must be a file")
       sys.exit(0)
@@ -21,37 +21,23 @@ def main(args):
 def ingest(path):
   time1 = time.time()
   print("ingesting: "+ path)
-  events = None
   
   events = pylog.parse_log(path)
       
   if not events:
     events = netpyfense.parse(path)
-    
-        
+      
   print("number of events in: "+path, len(events))      
 
-  #print(events)
-  db_objs = []  
-  
-  #db_objs.append(d)
-  
-  #num_objs = len(db_objs)
-  
-  #connection = pymongo.Connection('localhost', 27017)
-  #TODO: need to parameterize this call to get the collection we want based on file name
-  #collection = connection.dapper["ips"]  
-  #ids = collection.insert(db_objs)
-  #count = collection.count()
-  
-  #return ids==num_objs and count == num_objs
-  
-  
+  #do all the databas insertion
+  connection = pymongo.Connection('localhost', 27017)
+  collection = connection["dapper"]["events"]  
+  ids = collection.insert(events)
+ 
   time2 = time.time() - time1
-  print("Time to process",time2)  
-  
-  return True
-  
+  print("events ingested:",len(ids))
+  print("Time to ingest",time2)  
+  return len(ids)==len(events)
   
 if __name__=="__main__":
   main(sys.argv)

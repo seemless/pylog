@@ -27,7 +27,6 @@ def parse(path):
 def parse_flow_binary(path,bin_type):
     events = []
     args = ["flowd-reader",path]
-    file_name = path.split("/")[-1]
     pat = r'''^
             (?P<type>\w+)
             \s+recv_time\s+
@@ -62,7 +61,7 @@ def parse_flow_binary(path,bin_type):
         if m is not None:
             event = m.groupdict()
             event['type'] = bin_type
-            event["file_name"]=file_name
+            event["path"]=path
             cleaned = clean(event)
             events.extend([cleaned])
         p.stdout.flush()
@@ -72,14 +71,13 @@ def parse_flow_binary(path,bin_type):
 def parse_tcpdump(path, bin_type):
     events = []
     command = build_Tshark_command(path)
-    file_name = path.split("/")[-1]
     args = shlex.split(command)
     p = subprocess.Popen(args,stdout=subprocess.PIPE)
     for line in p.stdout.readlines():
         splits = line.split("\t")
         event = dict(zip(field_names,splits))
         event['type'] = bin_type         
-        event['file_name'] = file_name
+        event['path'] = path
         events.extend([event])
         p.stdout.flush()
     print("netpyfense processed: " , path, " events: ", len(events))
@@ -118,7 +116,7 @@ def parse_dragon(path, bin_type):
         else:
             event = dict(zip(headers,splits))
             event['type'] = bin_type
-            event['file_name'] = path.split("/")[-1]
+            event['path'] = path
             cleaned = clean(event)
             events.extend([cleaned])
         f.flush()
