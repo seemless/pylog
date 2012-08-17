@@ -1,4 +1,5 @@
 import re
+import time
 import carny
 
 def parse_log(path):
@@ -53,6 +54,8 @@ def parse_log(path):
                         events.extend([cleaned])
     else:
         print("Log type not found. Pylog is ignoring. \n"+ path)
+        
+    print("pylog processed: ", path," events: ",len(events),"time: ", time.time())
     return events
 
 def parse_line(line,pattern, headers=None):

@@ -18,10 +18,12 @@ def test(args):
 
 def parse(path):
     events = []
+    type_used = None
     for bin_type in bin_map:
         if path.endswith(bin_type) or bin_type in path:
             events = bin_map[bin_type](path,bin_type)
-
+          
+    print("netpyfense processed: ", path," events: ",len(events),"time: ", time.time())       
     return events
 
 def parse_flow_binary(path,bin_type):
@@ -65,7 +67,7 @@ def parse_flow_binary(path,bin_type):
             cleaned = clean(event)
             events.extend([cleaned])
         p.stdout.flush()
-    print("netpyfense processed: ", path," events: ",len(events))
+   
     return events 
 
 def parse_tcpdump(path, bin_type):
@@ -80,7 +82,7 @@ def parse_tcpdump(path, bin_type):
         event['path'] = path
         events.extend([event])
         p.stdout.flush()
-    print("netpyfense processed: " , path, " events: ", len(events))
+
     return events
 
 def build_Tshark_command(path):

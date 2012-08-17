@@ -25,18 +25,17 @@ def ingest(path):
   events = pylog.parse_log(path)
       
   if not events:
-    events = netpyfense.parse(path)
-      
-  print("number of events in: "+path, len(events))      
+    events = netpyfense.parse(path)      
 
   #do all the databas insertion
   connection = pymongo.Connection('localhost', 27017)
   collection = connection["dapper"]["events"]  
   ids = collection.insert(events)
- 
-  time2 = time.time() - time1
-  print("events ingested:",len(ids))
-  print("Time to ingest",time2)  
+  time2 = time.time()
+  delta = time2 - time1
+  print("events ingested into database: ",len(ids))
+  print("ingest processing time: ",delta) 
+  print("ingest time range: ",time1," - ",time2)
   return len(ids)==len(events)
   
 if __name__=="__main__":
