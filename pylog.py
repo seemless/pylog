@@ -1,5 +1,6 @@
 import re
 import time
+import codecs
 import carny
 
 def parse_log(path):
@@ -42,16 +43,20 @@ def parse_log(path):
         else:
             #it has a standard event every line, parse it
             with open(path) as f:
-                for line in f:     
-                    event = method(line,pattern,headers)
-                    if event is not None:
-                        event["type"] = type_used
-                        event["path"] = path
-                        #some logs don't record year data, add it. 
-                        if type_used in unspecified:
-                            event["date_time"] = event["date_time"].strip()+" 2006"
-                        cleaned = clean(event)
-                        events.extend([cleaned])
+                for i,line in enumerate(f):
+                    try:
+                        event = method(line.encode('utf8'),pattern,headers) 
+                        if event is not None:
+                            event["type"] = type_used
+                            event["path"] = path
+                            #some logs don't record year data, add it. 
+                            if type_used in unspecified:
+                                event["date_time"] = event["date_time"].strip()+" 2006"
+                            cleaned = clean(event)
+                            events.extend([cleaned]) 
+                    except Exception as e:
+                        print(i, e)
+
     else:
         print("Log type not found. Pylog is ignoring. \n"+ path)
         
@@ -139,7 +144,7 @@ def parse_mail_log_line(line,pattern,headers=None):
 def parse_ossec_log(path, type_used, file_name):
     
     events = []
-    with open(path) as f:
+    with codecs.open(path, encoding='utf-8') as f:
         for line in f:
             if "**" in line:
                 event = dict()
