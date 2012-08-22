@@ -11,23 +11,14 @@ def test(args):
     
     events = []
     print(args)
-    if os.path.isfile(args[0]):
-        parse(args[0])
-        
-
-
-def parse(path):
-    events = []
-    type_used = None
-    for bin_type in bin_map:
-        if path.endswith(bin_type) or bin_type in path:
-            events = bin_map[bin_type](path,bin_type)
-          
-    print("netpyfense processed: ", path," events: ",len(events),"time: ", time.time())       
-    return events
-
-def parse_flow_binary(path,bin_type):
-    events = []
+    for path in args:
+        if os.path.isfile(path):
+            counter = 0
+            for e in gen_events(path):
+                counter += 1
+            print(counter)
+def gen_flow(path):
+    print("INFO: binary type is: %s" % "flow")
     args = ["flowd-reader",path]
     pat = r'''^
             (?P<type>\w+)
@@ -56,34 +47,48 @@ def parse_flow_binary(path,bin_type):
     '''    
     comp = re.compile(pat,re.VERBOSE)    
     p = subprocess.Popen(args,stdout=subprocess.PIPE)
-
-
+ 
     for line in p.stdout.readlines():
+        cleaned = None
         m = comp.match(line)
         if m is not None:
             event = m.groupdict()
-            event['type'] = bin_type
+            event['type'] = "flow"
             event["path"]=path
             cleaned = clean(event)
-            events.extend([cleaned])
-        p.stdout.flush()
-   
-    return events 
+            
+        p.stdout.flush()    
+        yield cleaned    
 
-def parse_tcpdump(path, bin_type):
+def gen_events(path):
+    for bin_type in bin_map:
+        if path.endswith(bin_type) or bin_type in path:
+            return bin_map[bin_type](path)
+
+def parse(path):
     events = []
+    type_used = None
+    for bin_type in bin_map:
+        if path.endswith(bin_type) or bin_type in path:
+            events = bin_map[bin_type](path,bin_type)
+          
+    print("netpyfense processed: ", path," events: ",len(events),"time: ", time.time())       
+    return events
+
+def gen_tcpdump(path):
+    events = []
+    print("INFO: log type is: %s" % "tcpdump")
     command = build_Tshark_command(path)
     args = shlex.split(command)
     p = subprocess.Popen(args,stdout=subprocess.PIPE)
     for line in p.stdout.readlines():
         splits = line.split("\t")
         event = dict(zip(field_names,splits))
-        event['type'] = bin_type         
+        event['type'] = "tcpdump"         
         event['path'] = path
-        events.extend([event])
+        
         p.stdout.flush()
-
-    return events
+        yield event
 
 def build_Tshark_command(path):
    
@@ -91,10 +96,9 @@ def build_Tshark_command(path):
     head = "tshark -r %s -T fields -e " % (path)
     return head + tail
 
-def parse_dragon(path, bin_type):
-    events =[]
+def gen_dragon(path):
     f = None
-    
+    cleaned = None
     #use gzip if it is compressed
     if path.endswith(".gz"):
         f = gzip.open(path)
@@ -117,16 +121,15 @@ def parse_dragon(path, bin_type):
         
         else:
             event = dict(zip(headers,splits))
-            event['type'] = bin_type
+            event['type'] = "dragon"
             event['path'] = path
             cleaned = clean(event)
-            events.extend([cleaned])
+            
         f.flush()
-    f.close()
-    return events
+        yield cleaned
 
 #TODO: not done yet
-def parse_snort_alert(path, bin_type):
+def parse_snort_alert(path):
     
     events =[]
     f = None
@@ -140,6 +143,7 @@ def parse_snort_alert(path, bin_type):
     for line in f:
         print(line)
         f.flush()
+        yield event
 
 def clean(event):
   
@@ -152,10 +156,11 @@ def clean(event):
       
     return event
 
-bin_map = {".flow":parse_flow_binary,
-           "dragon.log":parse_dragon,
+bin_map = {#".flow":parse_flow_binary,
+           ".flow":gen_flow,
+           "dragon.log":gen_dragon,
            "alert":parse_snort_alert,
-           ".dmp":parse_tcpdump,
+           ".dmp":gen_tcpdump,
            }
 
 tshark_fields = ['frame.time_epoch',

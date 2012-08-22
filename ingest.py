@@ -21,8 +21,16 @@ def ingest(path):
   if gen:
     for e in gen:
       counter += 1
+  else:
+    gen = netpyfense.gen_events(path)
   
-  print ("INFO: there were %d events in %s path" % (counter, path))    
+  if gen:
+    for e in gen:
+      counter += 1
+      
+  time2 = time.time()
+  delta = time2-time1
+  print ("INFO: there were %d events in %s and took %d seconds to parse" % (counter, path, delta))    
     #events = netpyfense.parse(path)      
   
   #if events:
