@@ -60,10 +60,26 @@ def gen_flow(path):
         p.stdout.flush()    
         yield cleaned    
 
-def gen_events(path):
+def gen_events(path,method):
+
+    method = get_bin_type(path)
+    
+    if os.path.isfile(path) and method is not None:
+        return method(path)
+
+def get_bin_type(path):
+    ret = None
     for bin_type in bin_map:
         if path.endswith(bin_type) or bin_type in path:
-            return bin_map[bin_type](path)
+            ret = bin_map[bin_type]
+            break
+        
+    if ret is not None:
+        print("INFO: binary type is: %s" % ret)
+    else:
+        print("WARN: binary type: %s not found by netpyfense" % path)
+    return ret
+        
 
 def parse(path):
     events = []
@@ -131,7 +147,7 @@ def gen_dragon(path):
 #TODO: not done yet
 def parse_snort_alert(path):
     
-    events =[]
+    event = None
     f = None
     
     #use gzip if it is compressed
@@ -141,7 +157,7 @@ def parse_snort_alert(path):
         f = open(path)    
     
     for line in f:
-        print(line)
+
         f.flush()
         yield event
 
@@ -159,7 +175,7 @@ def clean(event):
 bin_map = {#".flow":parse_flow_binary,
            ".flow":gen_flow,
            "dragon.log":gen_dragon,
-           "alert":parse_snort_alert,
+           #"alert":parse_snort_alert,
            ".dmp":gen_tcpdump,
            }
 
