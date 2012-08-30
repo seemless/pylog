@@ -1,18 +1,12 @@
-import re, os, sys, time, codecs
+import re, os, sys, time, codecs, binascii
 import carny
 
 def test(args):
     gen_count = 0
     parse_count = 0
     
-    for path in args:
-        gen = gen_events(path)
-        if gen:
-            for e in gen:
-                gen_count += 1
-        parse_count += len(parse_log(path))
-    print(gen_count,parse_count)
-        
+    for k in log_map:
+        print(log_map[k]["method"])
             
 def gen_events(path):
     log_dict = get_log_type(path)
@@ -45,12 +39,31 @@ an epoch timestamp'''
                 e["epoch"] = carny.guess(e["date_time"])
                                 
             except Exception as e:
-                print("event is mis-formatted")
-                print(e)
+                print("ERROR: event is mis-formatted: %s" % str(e))
                 yield None
+            
+            
             e['type'] = used
             e['file_name'] = name
-            yield e   
+            
+            c = utf8_check(e)
+            yield c   
+            
+def utf8_check(event):
+    '''check an event to see if it has any nasty characters. '''
+    has_hex = False
+    for k,v in event.iteritems():
+        try:
+            
+            str(v).encode(encoding='utf8')
+        except Exception as e:
+            print("WARN: found unsupported characters, tried reformatting")
+            event[k] = reformat_content(v)
+            has_hex = True
+            
+    event["has_hex"] = has_hex
+    
+    return event
             
 def gen_dirty_event(lines, method, pattern, use_headers=None):
     '''abstaction generator that takes in lines of log files
@@ -98,49 +111,6 @@ in your use.'''
     
     return log_dict
 
-def parse_log(path):
-    events = []    
-    
-    log_dict = None
-    type_used = None
-    file_name = path.split("/")[-1]
-    log_dict = get_log_type(path)
-    
-    if log_dict is not None:
-        
-        method = log_dict["method"]
-        pattern = log_dict["pattern"]
-        headers = log_dict["headers"]
-        multiline = log_dict["multiline"]
-
-        #If the event is multilined, we can't generically parse through the
-        #file line by line. Therefore, we have to delegate the whole file to a
-        #new method for parsing.
-        if multiline:
-            events = method(path, type_used, file_name)
-            
-        else:
-            #it has a standard event every line, parse it
-            with open(path) as f:
-                for i,line in enumerate(f):
-                    try:
-                        event = method(line.encode('utf8'),pattern,headers) 
-                        if event is not None:
-                            event["type"] = type_used
-                            event["path"] = path
-                            #some logs don't record year data, add it. 
-                            if type_used in unspecified:
-                                event["date_time"] = event["date_time"].strip()+" 2006"
-                            cleaned = clean(event)
-                            events.extend([cleaned]) 
-                    except Exception as e:
-                        print(i, e)
-
-    else:
-        print("Log type not found. Pylog is ignoring. \n"+ path)
-        
-    print("pylog processed: ", path," events: ",len(events),"time: ", time.time())
-    return events
 
 def parse_line(line,pattern, headers=None):
     ret = None
@@ -175,12 +145,6 @@ def _use_headers(line, pattern, headers):
 
     return ret
 
-
-def parse_win_event_line(line,pattern):
-    header =[]
-    row = line.split(pattern)
-    
-    return dict(zip(headers,row))
 
 def parse_ie_log(line,pattern,headers=None):
     headers1 = ["date_time","log_level","message"]
@@ -250,22 +214,19 @@ def parse_ossec_log(path, type_used, file_name):
    
     return events
 
-
-def clean(event):
-  
-    try:
-        event["epoch"] = carny.guess(event["date_time"])
-    except Exception as e:
-        print("event is mis-formatted")
-        print(e)
-        return None
-    
-    return event
-
 def log_types():
     first_keys = log_map.keys()
     keys = first_keys+ [".log"]
     return keys
+
+def asciirepl(match):
+  # replace the hexadecimal characters with ascii characters
+    s = match.group()  
+    return binascii.unhexlify(s)  
+
+def reformat_content(data):
+    p = re.compile(r'\\x(\w{2})')
+    return p.sub(asciirepl, data)
 
 unspecified = ["_maillog", "_messages", "_secure", "_last.log"]
 
