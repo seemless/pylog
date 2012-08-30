@@ -8,19 +8,29 @@ def main(args):
 
   print("INFO: Args: " + str(args[1:]))
   for path in args[1:]:
-    file_paths = gen_paths(path)
-    for p in file_paths:
-      success = ingest(p)
-      print(success)
+    if "index" not in path:
+      file_paths = gen_paths(path)
+      for p in file_paths:
+        if p is not None:
+          success = ingest(p)
+          print(success)
+    else:
+      print("WARN: ignoring %s because it has an 'index' in it" % path)
 
 def gen_paths(path):
+  #index files are htmls that are used for quick fs browsing,
+  #they offer no information for the data set.
   if os.path.isdir(path):
     for path, dirlist, filelist in os.walk(path):
       for name in filelist:
-          yield os.path.join(path,name)      
+        if "index" not in name:
+          yield os.path.join(path,name)
+        else:
+          print("WARN: ignoring %s because it has an 'index' in it" % path)
   
   else:
     yield path
+
     
 def ingest(path):
   time1 = time.time()
@@ -45,14 +55,15 @@ def ingest(path):
     
       for event in gen:
         #Make the database insertion
-        try:
-          ids.extend([collection.insert(event)])
-          counter += 1
-        except Exception as e:
-          print("ERROR: in database insertion at file: %s" % path)
-          print("ERROR: malformed event: %s" % str(event))
-          print(e)
-          return False          
+        if event is not None:
+          try:
+            ids.extend([collection.insert(event)])
+            counter += 1
+          except Exception as e:
+            print("ERROR: in database insertion at file: %s" % path)
+            print("ERROR: malformed event: %s" % str(event))
+            print(e)
+            return False          
         
       break
 
