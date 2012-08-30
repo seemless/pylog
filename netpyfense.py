@@ -60,7 +60,7 @@ def gen_flow(path):
         p.stdout.flush()    
         yield cleaned    
 
-def gen_events(path,method):
+def gen_events(path):
 
     method = get_bin_type(path)
     

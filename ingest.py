@@ -8,58 +8,62 @@ def main(args):
 
   print("INFO: Args: " + str(args[1:]))
   for path in args[1:]:
-
-      success = ingest(path)
+    file_paths = gen_paths(path)
+    for p in file_paths:
+      success = ingest(p)
       print(success)
-      
 
+def gen_paths(path):
+  if os.path.isdir(path):
+    for path, dirlist, filelist in os.walk(path):
+      for name in filelist:
+          yield os.path.join(path,name)      
+  
+  else:
+    yield path
+    
 def ingest(path):
   time1 = time.time()
   print("INFO: ingesting file: "+ path)
-  counter = 0 
-  gen = pylog.gen_events(path)
-  if gen:
-    for e in gen:
-      counter += 1
-  else:
-    gen = netpyfense.gen_events(path)
   
-  if gen:
-    for e in gen:
-      counter += 1
-      
+  parsers = [pylog, netpyfense]
+  counter = 0 
+  collection = None
+  ids = []
+
+  for p in parsers:
+    gen = p.gen_events(path)
+    if gen:
+      #Make all the connections once
+      try:
+        connection = pymongo.Connection('localhost', 27017)
+        collection = connection["dapper"]["events"]  
+      except Exception as e:
+        print("ERROR: in ingest database connection")
+        print(e)
+        return False          
+    
+      for event in gen:
+        #Make the database insertion
+        try:
+          ids.extend([collection.insert(event)])
+          counter += 1
+        except Exception as e:
+          print("ERROR: in database insertion at file: %s" % path)
+          print("ERROR: malformed event: %s" % str(event))
+          print(e)
+          return False          
+        
+      break
+
   time2 = time.time()
   delta = time2-time1
-  print ("INFO: there were %d events in %s and took %d seconds to parse" % (counter, path, delta))    
-    #events = netpyfense.parse(path)      
-  
-  #if events:
-    
-    #try:
-      #connection = pymongo.Connection('localhost', 27017)
-      #collection = connection["dapper"]["events"]  
-    #except Exception as e:
-      #print("ERROR: in ingest database connection")
-      #print(e)
-      #return False    
-    
-    ##do all the databas insertion
-    #try:
-      #print("INFO: Inserting events into db: ", len(events))
-      #ids = collection.insert(events)
-    #except Exception as e:
-      #print("ERROR: in database insertion at file:", path)
-      #print(e)
-      #return False
-    
-    #time2 = time.time()
-    #delta = time2 - time1
-    #print("INFO: events ingested into database: ",len(ids))
-    #print("INFO: ingest processing time: ",delta) 
-    #print("INFO: ingest time range: ",time1," - ",time2)
-    #return len(ids)==len(events)
-  #else:
-  return False
+  print ("INFO: there were %d events in %s and the file took %d seconds to parse" % (counter, path, delta))      
+  print("INFO: events ingested into database: %d" % len(ids))
+  print("INFO: ingest processing time: %d " % delta) 
+  print("INFO: ingest time range: %d - %d" %(time1,time2))
+  return True
+
   
 if __name__=="__main__":
   main(sys.argv)
