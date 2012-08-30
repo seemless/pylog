@@ -29,7 +29,8 @@ def gen_events(path):
 def gen_clean(events, used, name):
     '''Take in an event iterable, log type, and a file name
 and use the latter two to enrich the event and give the event
-an epoch timestamp'''
+an epoch timestamp as well as ensure that there are no unprintable
+hex characters.'''
 
     for e in events:
         if e is not None:
@@ -58,7 +59,7 @@ def utf8_check(event):
             str(v).encode(encoding='utf8')
         except Exception as e:
             print("WARN: found unsupported characters, tried reformatting")
-            event[k] = reformat_content(v)
+            event[k] = reformat_content(v).decode('iso-8859-9').encode('utf8')
             has_hex = True
             
     event["has_hex"] = has_hex
