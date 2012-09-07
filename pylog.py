@@ -1,14 +1,21 @@
-import re, os, sys, time, codecs, binascii
+import re, os, sys, time, codecs, binascii, copy
 import carny
 
 def test(args):
     gen_count = 0
     parse_count = 0
     
-    for k in log_map:
-        print(log_map[k]["method"])
+    for arg in args:
+        gen = gen_events(arg)
+        for e in gen:
+            gen_count += 1
+    print("test complete. Number of events: %d" % gen_count)
+        
             
 def gen_events(path):
+    '''takes in a string representing a path on your computer, then utilizes
+    the rest of the library to produce a generator which yields dictionaries
+    representing log events. These '''
     log_dict = get_log_type(path)
             
     if os.path.isfile(path) and log_dict is not None:
@@ -30,7 +37,7 @@ def gen_clean(events, used, name):
     '''Take in an event iterable, log type, and a file name
 and use the latter two to enrich the event and give the event
 an epoch timestamp as well as ensure that there are no unprintable
-hex characters.'''
+hex characters. Yields a dictionary representing a cleaned event.'''
 
     for e in events:
         if e is not None:
@@ -55,10 +62,9 @@ def utf8_check(event):
     has_hex = False
     for k,v in event.iteritems():
         try:
-            
             str(v).encode(encoding='utf8')
         except Exception as e:
-            print("WARN: found unsupported characters, tried reformatting")
+            print("WARN: found unsupported characters, tried reformatting line from iso-8859-9 to utf8 : %s" % (v))
             event[k] = reformat_content(v).decode('iso-8859-9').encode('utf8')
             has_hex = True
             
@@ -129,20 +135,26 @@ def parse_line(line,pattern, headers=None):
 
 def _use_headers(line, pattern, headers):
     
+    cpy = copy.deepcopy(headers)
     splits = line.split(pattern)
     
     if len(splits) >= 8 and not splits[7]:
         splits.remove('')
 
-    if len(splits) != len(headers):
-        print("Header mismatch, re-check logs: \n"+ line+ "\nheaders: "+str(headers))
+    if len(splits) != len(cpy):
+        cpy.append("extra")
+        print("WARN: Header mismatch, tried a quick fix: %s" % (line))
+
+    if len(splits) != len(cpy):
+        print("ERROR: Header mismatch, recheck log file: %s" % (line))
+        print("ERROR: headers for above error: %s" % (str(headers)))        
         
-    ret = dict(zip(headers,splits))
+    ret = dict(zip(cpy,splits))
     try:
         ret["date_time"] = ret["date"]+" "+ret["time"]
     
     except Exception as e:
-        print("_use_headers caught an exception while trying to munge date_time", e)
+        print("WARN: _use_headers caught an exception while trying to munge date_time", e)
 
     return ret
 

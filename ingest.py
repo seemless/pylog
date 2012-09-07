@@ -64,9 +64,8 @@ def ingest(path):
             print("ERROR: malformed event: %s" % str(event))
             print(e)
             return False          
-        
-      break
-
+  
+  #Time keeping!
   time2 = time.time()
   delta = time2-time1
   print ("INFO: there were %d events in %s and the file took %d seconds to parse" % (counter, path, delta))      
@@ -75,7 +74,6 @@ def ingest(path):
   print("INFO: ingest time range: %d - %d" %(time1,time2))
   return True
 
-  
 if __name__=="__main__":
   main(sys.argv)
 
