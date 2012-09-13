@@ -1,7 +1,6 @@
 import sys, os, re, time
 import pylog
 import netpyfense
-import carny
 import pymongo
 
 def main(args):
