@@ -9,14 +9,36 @@ import carny
 
 def test(args):
     
-    events = []
-    print(args)
-    for path in args:
-        if os.path.isfile(path):
-            counter = 0
-            for e in gen_events(path):
-                counter += 1
-            print(counter)
+  events = []
+  print(args)
+  for path in args:
+    print("fields test is passed? %s" % (str(test_fields())))
+    #test_command(path)
+    test_generator_stack(path)
+
+def test_command(path):
+  print(build_Tshark_command(path))
+
+def test_fields():
+  return len(field_types) == len(field_names) == len(tshark_fields)
+
+def test_generator_stack(path):
+  if os.path.isfile(path):
+
+    counter = 0
+    stuff = []
+    for e in gen_events(path):
+      counter += 1
+      if counter < 2:
+        stuff.append(e)
+    print(counter)
+    print(stuff)
+
+def trace(source):
+  for item in source:
+    print item
+    yield item
+
 def gen_flow(path):
     print("INFO: binary type is: %s" % "flow")
     args = ["flowd-reader",path]
@@ -99,7 +121,19 @@ def gen_tcpdump(path):
     p = subprocess.Popen(args,stdout=subprocess.PIPE)
     for line in p.stdout.readlines():
         splits = line.split("\t")
-        event = dict(zip(field_names,splits))
+        mapped = []
+        for i,field in enumerate(splits):
+          try:
+            m = field_types[i](field)
+          except Exception as e:
+            print(e)
+            print(field_names[i])
+            print(field_types[i])
+            print(zip(field_names,splits))
+            sys.exit(-2)
+
+          mapped.append(m)
+        event = dict(zip(field_names,mapped))
         event['type'] = "tcpdump"         
         event['path'] = path
         
@@ -169,21 +203,19 @@ def clean(event):
         print("event is mis-formatted")
         print(e)
         return None
-      
+
     return event
 
-bin_map = {#".flow":parse_flow_binary,
-           ".flow":gen_flow,
+bin_map = {".flow":gen_flow,
            "dragon.log":gen_dragon,
-           #"alert":parse_snort_alert,
            ".dmp":gen_tcpdump,
            }
 
 tshark_fields = ['frame.time_epoch',
              'tcp.analysis.bytes_in_flight',
              'tcp.flags',
-             'tcp.out_of_order',
-             'tcp.reused_ports',
+             'tcp.analysis.out_of_order',
+             'tcp.analysis.reused_ports',
              'tcp.checksum',
              'tcp.checksum_bad',
              'tcp.checksum_good',
@@ -191,14 +223,15 @@ tshark_fields = ['frame.time_epoch',
              'tcp.hdr_len',
              'tcp.nxtseq',
              'tcp.options',
-             'tcp.optins.scps',
-             'tcp.wscale.multiplier',
-             'tcp.wscale.shift',
+             'tcp.options.scps',
+             'tcp.options.wscale.multiplier',
+             'tcp.options.wscale.shift',
              'tcp.pdu.size',
              'tcp.pdu.time',
              'tcp.proc.dstcmd',
              'tcp.proc.srccmd',
              'tcp.segment',
+             'tcp.segment.count',
              'tcp.seq',
              'tcp.stream',
              'tcp.time_delta',
@@ -235,6 +268,7 @@ field_names = ['epoch',
              'proc_dstcmd',
              'proc_srccmd',
              'segment',
+             'segment_count',
              'seq',
              'stream',
              'time_delta',
@@ -251,5 +285,58 @@ field_names = ['epoch',
              'ip_fragment_toolongfragment',
              'ip_hdr_len',
              ]
+lam = lambda s: int(s) if s.strip() !='' else 0
+fl = lambda f: float(f) if f.strip() !='' else float(0)
+def segment(field):
+  splits = field.split(",")
+  if len(splits) > 1:
+    segs = []
+    for i in splits:
+      segs.append(int(i))
+    return segs
+  else:
+    ret = 0
+    if field.strip() != '':
+      ret = int(field.strip())
+    return ret
+
+field_types = [fl,
+               segment,
+               str,
+               str,
+               str,
+               str,
+               bool,
+               bool,
+               segment,
+               segment,
+               segment,
+               str,
+               bool,
+               segment,
+               segment,
+               segment,
+               fl,
+               str,
+               str,
+               segment,
+               segment,
+               segment,
+               segment,
+               fl,
+               segment,
+               str,
+               str,
+               segment,
+               segment,
+               segment,
+               str,
+               bool,
+               bool,
+               segment,
+               bool,
+               segment,
+               ]
+
 
 if __name__=="__main__": test(sys.argv[1:])
