@@ -7,13 +7,29 @@ import pymongo
 import time
 
 def logistic(z):
-  return 1.0 / (1.0 + np.exp(-z))
+  x = np.exp(-z)
+  ret = 1.0 / (1.0 + x)
+  del x
+  return ret
 
 def predict(w, x):
-  return logistic(np.dot(w, x)) > 0.5 or -1
+  x = logistic(np.dot(w, x))
+  ret = x > 0.5 or -1
+  del x
+  return  ret
 
 def log_likelihood(X, Y, w, C=0.1):
-  return np.sum(np.log(logistic(Y * np.dot(X, w)))) - C/2 * np.dot(w, w)
+  #big
+  x_dot_w = np.dot(X, w)
+  y_dot_x = Y * x_dot_w
+  del x_dot_w 
+  logis = logistic(y_dot_x)
+
+  #big
+  w_dot_w = np.dot(w,w)
+
+  log_like = np.sum(np.log(logis)) - C/2 * w_dot_w
+  return log_like
 
 def log_likelihood_grad(X, Y, w, C=0.1):
   K = len(w)
@@ -38,6 +54,7 @@ def grad_num(X, Y, w, f, eps=0.00001):
     g[i] /= 2 * eps
 
   return g
+
 
 def train_w(X, Y, C=0.1):
   def f(w):
@@ -64,7 +81,10 @@ def fold(arr, K, i):
   arange = np.arange(N) # all indices
   heldout = np.logical_and(i * size <= arange, arange < (i+1) * size)
   rest = np.logical_not(heldout)
-  return arr[heldout], arr[rest]
+  h, r = arr[heldout], arr[rest]
+  del heldout
+  del rest
+  return h,r
 
 def kfold(arr, K):
   return [fold(arr, K, i) for i in range(K)]
@@ -100,68 +120,103 @@ def test_log_likelihood_grad(X, Y):
   print log_likelihood_grad(X, Y, w, C=0)
   print grad_num(X, Y, w, lambda X,Y,w: log_likelihood(X,Y,w,C=0))
 
-def load_data(folder, id, typey='tcpdump', step='train'):
-  attackCollection = None
+def load_data(folder, _id, typey='tcpdump', step='train'):
+  attack_collection = None
   connection = None
 
   try:
     connection = pymongo.Connection('localhost', 27017)
-    attackCollection = connection["dapper_modular"]['attacks']
+    attack_collection = connection["dapper_modular"]['attacks']
   except Exception as e:
     print("ERROR: in ingest database connection")
     print(e)
     return False
 
-  if attackCollection is None or connection is None:
+  if attack_collection is None or connection is None:
     return 2
 
-  attack = attackCollection.find_one({"id":id})
+  data_collection = connection['dapper_modular']['attack_'+folder+"_events"]
 
-  query = dict()
-  query['type'] = typey
+  attack = attack_collection.find_one({"id":_id})
 
+  data_query = dict()
+  data_query['type'] = typey
+  attack_query = dict()
+  attack_query['type'] = typey
+  attack_query['is_malicious'] = True
+
+  #make sure we have separation of data
   if 'train' in step:
-    print("attack duration",attack['end_epoch']-attack['start_epoch'])
-    query["epoch"] = {"$gte":attack['start_epoch'],"$lte":attack['end_epoch']}
+    data_query["epoch"] = {"$gte":attack['start_epoch'],"$lte":attack['end_epoch']}
+  if 'test' in step:
+    data_query["epoch"] = {"$lte":attack['start_epoch']}
+  
+  print(data_query)
+  attack_cursor = data_collection.find(attack_query)
+  data_cursor = data_collection.find(data_query, limit=1000)
 
-  dataCollection = connection['dapper_modular']['attack_'+folder+"_events"]
+  d_X_is, d_Y_is = get_components(data_cursor)
+  a_X_is, a_Y_is = get_components(attack_cursor)
+  
+  d_X_is.extend(a_X_is)
+  d_Y_is.extend(a_Y_is)
 
-  print(query)
-  cursor = dataCollection.find(query)
+  X = np.vstack(tuple(d_X_is))
+  Y = np.vstack(tuple(d_Y_is))
+  del data_cursor
+  del attack_cursor
+  del d_Y_is
+  del d_X_is
+  return X,Y
 
+def get_components(cursor):
   X_is = []
   Y_is = []
   for e in cursor:
     x_i = np.array([1]+[e['bytes_in_flight']])
     X_is.append(x_i)
 
-    y_i = 1 if e['is_malicious'] else 0
+    if e['is_malicious']:
+      y_i = 1
+    else:
+      y_i = 0
     Y_is.append(y_i)
-
-
-  X = np.vstack(tuple(X_is))
-  Y = np.vstack(tuple(Y_is))
-
-  return X,Y
+  print("data size: ",len(X_is))
+  return X_is, Y_is
 
 def LR(args):
-  X_train, Y_train = load_data(args.folder,args.id)
 
+  if type(args) == dict:
+    folder = args['folder']
+    _id = args['id']
+  else:
+    folder = args.folder
+    _id = args.id
+
+  C = None
+  print 'loading training data'
+  X_train, Y_train = load_data(folder,_id)
+  print 'training data loaded'
   # Uncomment the line below to check the gradient calculations
   #test_log_likelihood_grad(X_train, Y_train); exit()
   start = time.time()
-  C = train_C(X_train, Y_train)
-  print "C was", C
-  one = time.time()
-  print "train C took: ", one - start
-  w = train_w(X_train, Y_train, C)
+
+  #C = train_C(X_train, Y_train)
+  #print "C was", C
+  print 'training w'
+  w = train_w(X_train, Y_train)
+  print 'w trained'
+  del X_train
+  del Y_train
+
   two = time.time()
   print "w was", w
-  print "train w took: ", two - one
-
-  #X_test, Y_test = load_data(args.id,"test")
-  #print "accuracy was", accuracy(X_test, Y_test, w)
-
+  print "train w took: ", two - start
+  print 'loading test data'
+  X_test, Y_test = load_data(folder, _id, step="test")
+  print 'test data loaded'
+  print "accuracy was", accuracy(X_test, Y_test, w)
+  return True
 
 def test(args):
   print("testing Logistic Regression package")
@@ -171,21 +226,25 @@ def test(args):
 
 
 if __name__=="__main__":
-  parser = argparse.ArgumentParser("Logistic Regression functionality for DAPPER")
-  subparsers = parser.add_subparsers()
+  #parser = argparse.ArgumentParser("Logistic Regression functionality for DAPPER")
+  #subparsers = parser.add_subparsers()
 
+  #parser.add_argument('--folder', dest="folder")
+  #parser.add_argument("--id", dest="id")
+  #parser.set_defaults(func=LR)
   #add LR parser
-  LR_parser = subparsers.add_parser("lr")
-  LR_parser.add_argument('folder')
-  LR_parser.add_argument("id")
-  LR_parser.set_defaults(func=LR)
+  #LR_parser = subparsers.add_parser("lr")
+  #LR_parser.add_argument('--folder', dest="folder")
+  #LR_parser.add_argument("--id", dest="id")
+  #LR_parser.set_defaults(func=LR)
 
   #add test parser
-  test_parser = subparsers.add_parser("test")
-  test_parser.add_argument('folder')
-  test_parser.add_argument("id")
-  test_parser.set_defaults(func=test)
+  #test_parser = subparsers.add_parser("test")
+  #test_parser.add_argument('folder')
+  #test_parser.add_argument("id")
+  #test_parser.set_defaults(func=test)
 
   #make it happen
-  args = parser.parse_args()
-  args.func(args)
+  #args = parser.parse_args()
+  #args.func(args)
+  LR({"folder":"5s6","id":"2"})

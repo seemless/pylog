@@ -206,8 +206,8 @@ def clean(event):
 
     return event
 
-bin_map = {".flow":gen_flow,
-           "dragon.log":gen_dragon,
+bin_map = {#".flow":gen_flow,
+           #"dragon.log":gen_dragon,
            ".dmp":gen_tcpdump,
            }
 

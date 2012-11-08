@@ -4,7 +4,8 @@ import netpyfense
 import pymongo
 
 def main(args):
-  root = '/opt/www-01.pch.net/IARPA_data/data/Releases/release5labeled/'
+
+  root = '/opt/'
   attack = None
   attackFolder = args.path
 
@@ -59,8 +60,11 @@ def ingestAttacks(path):
 def ingest(path,attackFolder,attack=None):
   time1 = time.time()
   print("INFO: ingesting file: "+ path)
-  
-  parsers = [pylog, netpyfense]
+
+  parsers = [pylog,
+	     netpyfense,
+	    ]
+
   counter = 0 
   collection = None
   ids = []
