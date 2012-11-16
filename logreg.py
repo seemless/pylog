@@ -69,6 +69,7 @@ def train_w(X, Y, C=0.1):
   return scipy.optimize.fmin_bfgs(f, initial_guess, fprime, disp=False)
 
 def accuracy(X, Y, w):
+  print('calculating accuracy')
   n_correct = 0
   for i in range(len(X)):
     if predict(w, X[i]) == Y[i]:
@@ -120,7 +121,8 @@ def test_log_likelihood_grad(X, Y):
   print log_likelihood_grad(X, Y, w, C=0)
   print grad_num(X, Y, w, lambda X,Y,w: log_likelihood(X,Y,w,C=0))
 
-def load_data(folder, _id, typey='tcpdump', step='train'):
+def load_data(folder, _id, fields=['bytes_in_flight'],count=100,typey='tcpdump', step='train'):
+  print('loading data for ' + step)
   attack_collection = None
   connection = None
 
@@ -141,6 +143,7 @@ def load_data(folder, _id, typey='tcpdump', step='train'):
 
   data_query = dict()
   data_query['type'] = typey
+  data_query['is_malicious'] = False
   attack_query = dict()
   attack_query['type'] = typey
   attack_query['is_malicious'] = True
@@ -148,15 +151,12 @@ def load_data(folder, _id, typey='tcpdump', step='train'):
   #make sure we have separation of data
   if 'train' in step:
     data_query["epoch"] = {"$gte":attack['start_epoch'],"$lte":attack['end_epoch']}
-  if 'test' in step:
-    data_query["epoch"] = {"$lte":attack['start_epoch']}
-  
-  print(data_query)
-  attack_cursor = data_collection.find(attack_query)
-  data_cursor = data_collection.find(data_query, limit=1000)
 
-  d_X_is, d_Y_is = get_components(data_cursor)
-  a_X_is, a_Y_is = get_components(attack_cursor)
+  attack_cursor = data_collection.find(attack_query)
+  data_cursor = data_collection.find(data_query, limit=count)
+
+  d_X_is, d_Y_is = get_components(data_cursor,fields)
+  a_X_is, a_Y_is = get_components(attack_cursor,fields)
   
   d_X_is.extend(a_X_is)
   d_Y_is.extend(a_Y_is)
@@ -169,19 +169,30 @@ def load_data(folder, _id, typey='tcpdump', step='train'):
   del d_X_is
   return X,Y
 
-def get_components(cursor):
+def get_components(cursor,fields):
   X_is = []
   Y_is = []
+
   for e in cursor:
-    x_i = np.array([1]+[e['bytes_in_flight']])
-    X_is.append(x_i)
+    cols = []
+    for f in fields:
+      if type(e[f]) == list:
+        #take the first one
+        cols.append(e[f][0])
+      else:
+        cols.append(e[f])
+    try:
+      x_i = np.array([1]+cols)
+      X_is.append(x_i)
+    except ValueError as e:
+      print(cols)
+      print(e)
 
     if e['is_malicious']:
       y_i = 1
     else:
       y_i = 0
     Y_is.append(y_i)
-  print("data size: ",len(X_is))
   return X_is, Y_is
 
 def LR(args):
@@ -189,54 +200,67 @@ def LR(args):
   if type(args) == dict:
     folder = args['folder']
     _id = args['id']
+    count = args['count']
+    fields = args['fields']
   else:
     folder = args.folder
     _id = args.id
+    count = int(args.count)
+
+
+
+
 
   C = None
-  print 'loading training data'
-  X_train, Y_train = load_data(folder,_id)
-  print 'training data loaded'
+  X_train, Y_train = load_data(folder,_id,count=count,fields=fields)
   # Uncomment the line below to check the gradient calculations
   #test_log_likelihood_grad(X_train, Y_train); exit()
   start = time.time()
 
   #C = train_C(X_train, Y_train)
   #print "C was", C
-  print 'training w'
   w = train_w(X_train, Y_train)
-  print 'w trained'
+
   del X_train
   del Y_train
 
-  two = time.time()
-  print "w was", w
-  print "train w took: ", two - start
-  print 'loading test data'
   X_test, Y_test = load_data(folder, _id, step="test")
-  print 'test data loaded'
-  print "accuracy was", accuracy(X_test, Y_test, w)
-  return True
+  acc = accuracy(X_test, Y_test, w)
+
+  del X_test
+  del Y_test
+
+  return acc,w
 
 def test(args):
+  if type(args) == dict:
+    folder = args['folder']
+    _id = args['id']
+    count = args['count']
+    fields = args['fields']
+  else:
+    folder = args.folder
+    _id = args.id
   print("testing Logistic Regression package")
-  X, Y = load_data(args.folder,args.id)
+  X, Y = load_data(folder,_id,count=count,step='test',fields=fields)
   print(X[:10])
   print(Y[:10])
 
 
 if __name__=="__main__":
-  #parser = argparse.ArgumentParser("Logistic Regression functionality for DAPPER")
-  #subparsers = parser.add_subparsers()
+  parser = argparse.ArgumentParser("Logistic Regression functionality for DAPPER")
+  subparsers = parser.add_subparsers()
 
-  #parser.add_argument('--folder', dest="folder")
-  #parser.add_argument("--id", dest="id")
-  #parser.set_defaults(func=LR)
+  parser.add_argument('--folder', dest="folder")
+  parser.add_argument("--id", dest="id")
+  parser.set_defaults(func=LR)
   #add LR parser
-  #LR_parser = subparsers.add_parser("lr")
-  #LR_parser.add_argument('--folder', dest="folder")
-  #LR_parser.add_argument("--id", dest="id")
-  #LR_parser.set_defaults(func=LR)
+  LR_parser = subparsers.add_parser("lr")
+  LR_parser.add_argument('--folder', dest="folder")
+  LR_parser.add_argument("--id", dest="id")
+  LR_parser.add_argument('--count', dest='count')
+  LR_parser.add_argument('--num_fields', dest='field_indx')
+  LR_parser.set_defaults(func=LR)
 
   #add test parser
   #test_parser = subparsers.add_parser("test")
@@ -245,6 +269,6 @@ if __name__=="__main__":
   #test_parser.set_defaults(func=test)
 
   #make it happen
-  #args = parser.parse_args()
-  #args.func(args)
-  LR({"folder":"5s6","id":"2"})
+  args = parser.parse_args()
+  args.func(args)
+  #LR({"folder":"5s6","id":"2"})
